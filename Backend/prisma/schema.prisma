@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  name          String
+  email         String    @unique
+  phone         String?
+  password      String
+  role          String    @default("consumer") // consumer | restaurant | ngo
+
+  // Restaurant-specific
+  businessName  String?
+  cuisineType   String?
+  businessImage String?
+
+  // NGO-specific
+  ngoRegNumber  String?
+  contactPerson String?
+  website       String?
+  serviceRadius Float?    @default(15)
+  documentReg   String?
+  documentDeed  String?
+  document12A   String?
+  document80G   String?
+  documentRegStatus  String? @default("No Document")
+  documentDeedStatus String? @default("No Document")
+  document12AStatus  String? @default("No Document")
+  document80GStatus  String? @default("No Document")
+
+  // Location (all roles)
+  address       String?
+  city          String?
+  state         String?
+  pincode       String?
+
+  // Coordinates — set via geocoding, drive PostGIS proximity queries
+  latitude      Float?
+  longitude     Float?
+  // PostGIS geography column — managed by migration trigger (not usable via Prisma client directly)
+  coords        Unsupported("geography(Point, 4326)")?
+
+
+
+  // Consumer profile extras
+  avatar        String?   // uploaded photo URL
+  bio           String?
+
+  // Notification preferences (consumer)
+  notifEmailOrders    Boolean @default(true)
+  notifEmailListings  Boolean @default(true)
+  notifEmailDigest    Boolean @default(false)
+  notifSmsOrders      Boolean @default(true)
+  notifSmsListings    Boolean @default(false)
+
+  // Notification preferences (NGO)
+  notifNgoDonations   Boolean @default(true)
+  notifNgoStatus      Boolean @default(true)
+  notifNgoSms         Boolean @default(false)
+  notifNgoDigest      Boolean @default(true)
+
+  // Privacy preferences (consumer)
+  privacyShowLeaderboard Boolean @default(true)
+  privacyPublicProfile   Boolean @default(true)
+
+  // Auth internals
+  resetOtp      String?
+  otpExpiry     DateTime?
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  listings      FoodListing[]
+  orders        Order[]
+  favorites     Favorite[]
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  consumerId  Int
+  consumer    User        @relation(fields: [consumerId], references: [id])
+  notes       String?
+  status      String      @default("pending") // pending | confirmed | ready | completed | cancelled
+  foodSaved   Float       @default(0)
+  co2Saved    Float       @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id          Int         @id @default(autoincrement())
+  orderId     Int
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listingId   Int
+  listing     FoodListing @relation(fields: [listingId], references: [id])
+  quantity    Float
+  pickupSlot  String?
+  name        String      // snapshot
+  image       String?     // snapshot
+  restaurantName String?  // snapshot
+}
+
+model FoodListing {
+  id              Int       @id @default(autoincrement())
+  restaurantId    Int
+  restaurant      User      @relation(fields: [restaurantId], references: [id])
+
+  // Basic Info
+  name            String
+  category        String
+  subCategory     String?
+  description     String?
+  tags            String?
+
+  // Images (JSON array of URLs)
+  images          String    @default("[]")
+
+  // Location for proximity
+  city            String?   // for nearby matching
+
+  // Quantity & Pricing
+  quantity        Float
+  unit            String    @default("kg")
+  originalPrice   Float
+  discountedPrice Float
+  minOrder        Float?
+
+  // Availability
+  expiryDate      String
+  expiryTime      String
+  availableFrom   DateTime?
+  availableUntil  DateTime?
+
+  // Details
+  ingredients     String?
+  allergens       String    @default("[]")
+  dietary         String    @default("[]")
+  storage         String?
+
+  // Logistics
+  pickup          Boolean   @default(true)
+  delivery        Boolean   @default(false)
+  deliveryRadius  Float?
+  packaging       String?
+  instructions    String?
+
+  // Status
+  status          String    @default("active") // active | draft | expired
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  orderItems      OrderItem[]
+  favorites       Favorite[]
+}
+
+model Favorite {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId Int
+  listing   FoodListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@unique([userId, listingId])
+}
+
+model Beneficiary {
+  id            Int            @id @default(autoincrement())
+  ngoId         Int
+  name          String
+  type          String
+  location      String
+  size          Int
+  contactPhone  String?
+  notes         String?
+  mealsReceived Int            @default(0)
+  lastServed    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  distributions Distribution[]
+}
+
+model Distribution {
+  id             Int         @id @default(autoincrement())
+  ngoId          Int
+  beneficiaryId  Int
+  beneficiary    Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  orderId        Int?
+  foodItems      String
+  quantity       Float
+  unit           String      @default("kg")
+  distributedAt  DateTime    @default(now())
+}
