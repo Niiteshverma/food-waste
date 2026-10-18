@@ -4,6 +4,12 @@ import prisma from "../lib/prisma.js";
 async function main() {
   console.log("🌱 Starting FoodSave database seeding...");
 
+  const userCount = await prisma.user.count();
+  if (userCount > 0 && process.env.FORCE_SEED !== "true") {
+    console.log(`Database already contains ${userCount} users. Skipping seed to preserve data.`);
+    return;
+  }
+
   // Clear existing data safely
   await prisma.distribution.deleteMany().catch(() => {});
   await prisma.beneficiary.deleteMany().catch(() => {});
